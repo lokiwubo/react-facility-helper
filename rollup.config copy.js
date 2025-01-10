@@ -1,4 +1,3 @@
-import commonjs from "@rollup/plugin-commonjs";
 import resolve from "@rollup/plugin-node-resolve";
 // import terser from "@rollup/plugin-terser";
 import typescript from "@rollup/plugin-typescript";
@@ -15,7 +14,6 @@ export default [
         preserveModulesRoot: "src",
         sourcemap: true,
         dir: "dist",
-        entryFileNames: "[name].js",
       },
       {
         // file: "dist/index.esm.js",
@@ -24,7 +22,6 @@ export default [
         preserveModulesRoot: "src",
         sourcemap: true,
         dir: "dist",
-        entryFileNames: "[name].esm.js",
       },
     ],
     plugins: [
@@ -32,7 +29,7 @@ export default [
         includeDependencies: true,
       }),
       resolve({ extensions: [".js", ".ts", ".jsx", ".tsx"] }), // 用于解析模块
-      commonjs(), // 用于转换 CommonJS 模块为 ES6 模块
+      // commonjs(), // 用于转换 CommonJS 模块为 ES6 模块
       typescript({
         tsconfig: "./tsconfig.types.json",
         declaration: true,
