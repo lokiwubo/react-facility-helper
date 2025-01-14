@@ -1,5 +1,5 @@
 import { Draft, produce } from "immer";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createHash } from "store-provider-helper";
 import type { AnyLike, FunctionLike } from "ts-utils-helper";
 
@@ -74,14 +74,16 @@ export const useClient = <
     trigger,
   });
 
-  if (!clientHashMap.has(clientKey)) {
-    const promise = trigger(...outPut.payload);
-    clientHashMap.set(clientKey, {
-      cachePromise: promise,
-      date: new Date(),
-      cacheResponse: undefined,
-    });
-  }
+  useEffect(() => {
+    if (!clientHashMap.has(clientKey)) {
+      const promise = trigger(...outPut.payload);
+      clientHashMap.set(clientKey, {
+        cachePromise: promise,
+        date: new Date(),
+        cacheResponse: undefined,
+      });
+    }
+  }, [clientKey, outPut.payload, trigger]);
 
   return useMemo(() => {
     const cache = clientHashMap.get(clientKey);
