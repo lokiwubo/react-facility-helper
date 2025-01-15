@@ -31,3 +31,4 @@ export const use = <
   }
   throw promise;
 };
+export default use;

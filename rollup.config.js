@@ -1,6 +1,6 @@
 import commonjs from "@rollup/plugin-commonjs";
 import resolve from "@rollup/plugin-node-resolve";
-// import terser from "@rollup/plugin-terser";
+import terser from "@rollup/plugin-terser";
 import typescript from "@rollup/plugin-typescript";
 import peerDepsExternal from "rollup-plugin-peer-deps-external";
 /**@type @type {import("rollup").RollupOptions[]} */
@@ -37,10 +37,10 @@ export default [
         tsconfig: "./tsconfig.types.json",
         declaration: true,
       }),
-      // terser({
-      //   compress: true, // 启用压缩
-      //   mangle: true, // 启用混淆
-      // }),
+      terser({
+        compress: true, // 启用压缩
+        mangle: true, // 启用混淆
+      }),
     ],
     external: ["react", "antd", "@emotion/react"],
   },
