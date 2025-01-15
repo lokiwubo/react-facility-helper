@@ -1,6 +1,6 @@
 {
   "name": "react-facility-helper",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "基于antd 二次简单封装和react 的一些功能封装",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
