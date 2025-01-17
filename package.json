@@ -13,7 +13,7 @@
     "release:patch": "npm version patch && npm publish",
     "patch": "npm run build && npm version patch && npm pack",
     "watch": "nodemon --ignore dist/ --ignore node_modules/ --watch src/ -C -e ts,tsx --debug -x 'npm run build'",
-    "publish": "node ./scripts/publish.js &&  publish"
+    "prepublishOnly": "rimraf --glob dist/**/*.js.map"
   },
   "keywords": [],
   "author": "wu",
