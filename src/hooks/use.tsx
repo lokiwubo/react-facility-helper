@@ -1,4 +1,4 @@
-import { AnyLike, GetPromiseType } from "ts-utils-helper";
+import type { AnyLike, GetPromiseType } from "ts-utils-helper";
 
 export const use = <
   T extends PromiseLike<AnyLike> & {

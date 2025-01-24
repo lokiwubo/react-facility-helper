@@ -1,17 +1,26 @@
-import { Draft, produce } from "immer";
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import type { Draft } from "immer";
+import { produce } from "immer";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { createHash, type AnyLike, type FunctionLike } from "ts-utils-helper";
 
-type UseClientOutputType<T, TArgs extends AnyLike[]> = {
+type UseClientOutputType<T, TArgs extends unknown[]> = {
   error?: unknown;
-  isLoaded: boolean;
+  isInitialized: boolean;
+  isLoading: boolean;
   data?: T;
   payload: TArgs;
   trigger: (...args: TArgs) => void;
 };
 
 type ClientCache = {
-  cachePromise: Promise<AnyLike>;
+  cachePromise: Promise<unknown>;
+  status: "pending" | "fulfilled" | "rejected";
   timestamp: number; // 缓存时间  时间戳
   cacheResponse: AnyLike; // 缓存数据
 };
@@ -29,86 +38,94 @@ export const createUseClient = (options: ClientOptions) => {
     client: TClient,
     ...payload: Parameters<TClient>
   ): UseClientOutputType<TValue, Parameters<TClient>> => {
-    const [isMounted, setIsMounted] = useState(false);
     const [outPut, setOutPut] = useState<
-      UseClientOutputType<TValue, Parameters<TClient>>
+      Omit<UseClientOutputType<TValue, Parameters<TClient>>, "trigger">
     >({
-      isLoaded: false,
+      isInitialized: false,
+      isLoading: true,
       data: undefined as TValue,
       payload: payload,
-      get trigger() {
-        return trigger;
-      },
     });
     const clientKey = useMemo(
-      () => `${createHash(client.toString())}|${createHash(payload)}`,
+      () =>
+        `${client.name}:${createHash(client.toString())}_${createHash(payload)}`,
       [client, payload],
     );
+    const [_isPending, startTransition] = useTransition();
+
     const trigger = useCallback(
       (...payload: Parameters<TClient>) => {
+        if (outPut.isInitialized && !outPut.isLoading) {
+          setOutPut((state) =>
+            produce(state, (draft) => {
+              draft.error = undefined;
+              draft.isLoading = true;
+            }),
+          );
+        }
+        let _isError = false;
+        let _data: unknown;
         return Promise.resolve(Reflect.apply(client, client, payload))
           .then((data) => {
-            clientHashMap.set(clientKey, {
-              cachePromise: Promise.resolve(null),
-              timestamp: Date.now(),
-              cacheResponse: data,
-            });
-            if (isMounted) {
-              setOutPut((state) =>
-                produce(state, (draft) => {
-                  draft.error = undefined;
-                  draft.isLoaded = true;
-                  draft.data = data as Draft<TValue>;
-                  draft.payload = payload as Draft<Parameters<TClient>>;
-                }),
-              );
-            }
-            return data;
+            _data = data;
+            _isError = false;
           })
           .catch((error) => {
+            _data = error;
+            _isError = true;
+          })
+          .finally(() => {
             clientHashMap.set(clientKey, {
               cachePromise: Promise.resolve(null),
+              status: _isError ? "rejected" : "fulfilled",
               timestamp: Date.now(),
-              cacheResponse: error,
+              cacheResponse: _data,
             });
-            if (isMounted) {
-              setOutPut((state) =>
-                produce(state, (draft) => {
-                  draft.error = error;
-                  draft.isLoaded = true;
-                  draft.data = undefined as Draft<TValue>;
-                  draft.payload = payload as Draft<Parameters<TClient>>;
-                }),
+            if (outPut.isInitialized) {
+              startTransition(() =>
+                setOutPut((state) =>
+                  produce(state, (draft) => {
+                    draft.error = _isError ? _data : undefined;
+                    draft.isInitialized = true;
+                    draft.isLoading = false;
+                    draft.data = _isError
+                      ? undefined
+                      : (_data as Draft<TValue>);
+                    draft.payload = payload as Draft<Parameters<TClient>>;
+                  }),
+                ),
               );
             }
           });
       },
-      [client, clientKey, isMounted],
+      [client, clientKey, outPut],
     );
 
-    if (!clientHashMap.has(clientKey)) {
-      const promise = trigger(...outPut.payload);
-      clientHashMap.set(clientKey, {
-        cachePromise: promise,
-        timestamp: Date.now(),
-        cacheResponse: undefined,
-      });
-    }
-    useLayoutEffect(() => {
-      setIsMounted(true);
-      return () => {
-        setIsMounted(false);
-      };
-    }, []);
+    useEffect(() => {
+      const cache = clientHashMap.get(clientKey);
+      if (cache) {
+        setOutPut((state) =>
+          produce(state, (draft) => {
+            draft.error =
+              cache.status === "rejected" ? cache.cacheResponse : undefined;
+            draft.isInitialized = true;
+            draft.isLoading = false;
+            draft.data =
+              cache.status === "fulfilled"
+                ? cache.cacheResponse
+                : (undefined as Draft<TValue>);
+          }),
+        );
+      }
+    }, [clientKey]);
 
-    useLayoutEffect(() => {
+    useEffect(() => {
       return () => {
         const cacheTimestamp = clientHashMap.get(clientKey)?.timestamp;
         /**
          * @description 当缓存过期 或者 未设置缓存事件时候 删除缓存
          */
         if (
-          isMounted &&
           cacheTimestamp &&
           (options.maxAge === undefined ||
             Date.now() - cacheTimestamp > options.maxAge)
@@ -116,22 +133,32 @@ export const createUseClient = (options: ClientOptions) => {
           clientHashMap.delete(clientKey);
         }
       };
-    }, [clientKey, isMounted]);
+    }, [clientKey]);
 
     return useMemo(() => {
       const cache = clientHashMap.get(clientKey);
-      if (cache && cache.cacheResponse) {
+      if (outPut.isInitialized) {
+        return { ...outPut, trigger };
+      } else if (cache && cache.cacheResponse) {
         return {
-          isLoaded: true,
+          isInitialized: true,
           data: outPut?.data ?? cache.cacheResponse,
+          isLoading: false,
           payload: outPut.payload,
           error: outPut?.error,
           trigger,
         };
-      } else if (outPut.isLoaded) {
-        return outPut;
       } else {
-        throw Promise.resolve(null);
+        throw new Promise((resolve) => {
+          const promise = trigger(...outPut.payload);
+          clientHashMap.set(clientKey, {
+            cachePromise: promise,
+            timestamp: Date.now(),
+            status: "pending",
+            cacheResponse: undefined,
+          });
+          resolve(null);
+        });
       }
     }, [clientKey, outPut, trigger]);
   };

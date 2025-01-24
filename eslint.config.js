@@ -66,6 +66,13 @@ export default [
         },
       ],
       "react/no-unknown-property": ["error", { ignore: ["css"] }],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          disallowTypeAnnotations: true,
+        },
+      ],
     },
   },
 ];
